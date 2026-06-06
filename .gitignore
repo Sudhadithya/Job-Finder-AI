@@ -65,9 +65,12 @@ Sudhadithya_Resume.pdf
 *.sln
 *.sw?
 
-#Extra files
+# Extra files
 implementation_plan.md
 walkthrough.md
 AGENTS.md
 CLAUDE.md
+frontend/README.md
 
+# Dev-only scripts
+backend/verify_*.py
