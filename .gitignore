@@ -1,0 +1,73 @@
+# OS metadata
+.DS_Store
+Thumbs.db
+
+# Virtual Environments
+.venv/
+venv/
+env/
+ENV/
+*.venv/
+
+# Python compiled files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Node / JS dependencies
+node_modules/
+.pnp
+.pnp.*
+
+# Next.js build outputs
+.next/
+out/
+build/
+tsconfig.tsbuildinfo
+next-env.d.ts
+
+# Logs and Debug outputs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+backend/resume_debug.txt
+backend/job_audit.txt
+backend/fallback_test.txt
+backend/parse_result.json
+
+# Local database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Environment variables (sensitive info)
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+backend/.env
+frontend/.env
+
+# User uploads / PDFs
+backend/uploads/*
+!backend/uploads/.gitkeep
+Sudhadithya_Resume.pdf
+
+# IDE/Editor settings
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+#Extra files
+implementation_plan.md
+walkthrough.md
+AGENTS.md
+CLAUDE.md
+
