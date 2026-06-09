@@ -7,12 +7,7 @@ import { UserProfile, Job } from "@/types";
 
 const CATEGORIES = [
   "SDE-1",
-  "SDE-2",
-  "Junior Developer",
-  "Associate",
-  "New Grad",
-  "Data Scientist",
-  "Machine Learning Engineer"
+  "Data Scientist"
 ];
 
 export default function DashboardPage() {

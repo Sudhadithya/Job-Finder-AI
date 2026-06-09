@@ -4,9 +4,23 @@ from app.jobsources.base import BaseJobSource, JobPosting
 from app.services.text_cleaner import clean_description
 
 class AshbySource(BaseJobSource):
-    def __init__(self, board_id: str, company_name: str):
+    def __init__(self, board_id: str, company_name: str,
+                 aliases: list[str] | None = None,
+                 exclude_terms: list[str] | None = None):
         self.board_id = board_id
         self.company_name = company_name
+        self._aliases_lower = [a.lower() for a in aliases] if aliases else None
+        self._exclude_lower = [t.lower() for t in exclude_terms] if exclude_terms else None
+
+    def _title_passes(self, title_lower: str) -> bool:
+        """Return True if the title passes alias inclusion and exclusion filters."""
+        if self._exclude_lower:
+            for term in self._exclude_lower:
+                if term in title_lower:
+                    return False
+        if self._aliases_lower:
+            return any(alias in title_lower for alias in self._aliases_lower)
+        return True
 
     async def scrape(self) -> list[JobPosting]:
         url = f"https://api.ashbyhq.com/posting-api/job-board/{self.board_id}"
@@ -25,6 +39,13 @@ class AshbySource(BaseJobSource):
                     j_id = (j.get("id") or "").strip()
                     title = (j.get("title") or "").strip()
                     job_url = (j.get("jobUrl") or "").strip()
+
+                    if not (j_id and title and job_url):
+                        continue
+
+                    # Early filter: alias inclusion + seniority exclusion
+                    if not self._title_passes(title.lower()):
+                        continue
                     
                     loc = (j.get("location") or "").strip()
 
@@ -41,9 +62,6 @@ class AshbySource(BaseJobSource):
                             posted_at = datetime.fromisoformat(cleaned_dt)
                         except Exception:
                             pass
-
-                    if not (j_id and title and job_url):
-                        continue
                             
                     postings.append(JobPosting(
                         job_id=f"ashby:{self.board_id}:{j_id}",

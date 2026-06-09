@@ -22,7 +22,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.models.models import Job, DiscoveredCompany
 from app.services.location import classify_location
-from app.services.role_filter import classify_role, verdict_to_score_adjustment
+from app.services.role_filter import classify_role, verdict_to_score_adjustment, ROLE_ALIASES, GLOBAL_EXCLUDE_WORDS
 from app.services.text_cleaner import clean_description
 from app.jobsources.greenhouse import GreenhouseSource
 from app.jobsources.lever import LeverSource
@@ -229,6 +229,20 @@ async def run_job_discovery(db: Session, user_category: str | None = None) -> di
     seed_companies_if_empty(db)
 
     # -----------------------------------------------------------------------
+    # Resolve role aliases and exclusion terms for the selected category
+    # -----------------------------------------------------------------------
+    aliases: list[str] | None = None
+    if user_category:
+        for key in ROLE_ALIASES:
+            if key.lower() == user_category.strip().lower():
+                aliases = ROLE_ALIASES[key]
+                break
+    exclude_terms = list(GLOBAL_EXCLUDE_WORDS)  # always apply seniority exclusion
+
+    alias_info = f"aliases={len(aliases)}" if aliases else "aliases=None (no filter)"
+    print(f"Role mode: category={user_category!r}, {alias_info}, exclude_terms={len(exclude_terms)}")
+
+    # -----------------------------------------------------------------------
     # Phase 2: Load and validate boards
     # -----------------------------------------------------------------------
     companies = db.query(DiscoveredCompany).all()
@@ -250,11 +264,11 @@ async def run_job_discovery(db: Session, user_category: str | None = None) -> di
                 continue
 
         if c.board_type == "greenhouse":
-            scrapers.append((c, GreenhouseSource(c.board_id, c.name)))
+            scrapers.append((c, GreenhouseSource(c.board_id, c.name, aliases=aliases, exclude_terms=exclude_terms)))
         elif c.board_type == "lever":
-            scrapers.append((c, LeverSource(c.board_id, c.name)))
+            scrapers.append((c, LeverSource(c.board_id, c.name, aliases=aliases, exclude_terms=exclude_terms)))
         elif c.board_type == "ashby":
-            scrapers.append((c, AshbySource(c.board_id, c.name)))
+            scrapers.append((c, AshbySource(c.board_id, c.name, aliases=aliases, exclude_terms=exclude_terms)))
 
     print(f"Scraping {len(scrapers)} active company boards (skipped {boards_skipped} recently failed)...")
 
@@ -302,8 +316,22 @@ async def run_job_discovery(db: Session, user_category: str | None = None) -> di
 
     db.commit()
 
+    # -----------------------------------------------------------------------
+    # In-memory deduplication by job_id (before entering filter pipeline)
+    # -----------------------------------------------------------------------
+    seen_ids: set[str] = set()
+    unique_postings: list = []
+    for p in all_postings:
+        if p.job_id not in seen_ids:
+            seen_ids.add(p.job_id)
+            unique_postings.append(p)
+    dedup_removed = len(all_postings) - len(unique_postings)
+    all_postings = unique_postings
+    if dedup_removed:
+        print(f"  Dedup: removed {dedup_removed} duplicate postings before filtering.")
+
     active_boards_found = boards_successful
-    print(f"Board scraping complete: {boards_successful} OK, {boards_failed} failed.")
+    print(f"Board scraping complete: {boards_successful} OK, {boards_failed} failed. {len(all_postings)} unique postings.")
 
     for failure in board_failures:
         print(f"  BOARD_FAIL: {json.dumps(failure)}")

@@ -13,11 +13,30 @@ from typing import Literal
 RoleVerdict = Literal["PRIORITY", "NEUTRAL", "PENALIZED", "EXCLUDED"]
 
 # ---------------------------------------------------------------------------
+# Canonical role aliases — used for scraper query expansion AND classification.
+# Each key is a user-selectable category; its value is the list of title
+# variants that belong to that category.
+# ---------------------------------------------------------------------------
+ROLE_ALIASES: dict[str, list[str]] = {
+    "SDE-1": [
+        "Software Engineer", "Software Development Engineer", "SDE", "SDE-1",
+        "Software Developer", "Backend Engineer", "Frontend Engineer",
+        "Full Stack Engineer", "Engineer I", "Associate Software Engineer",
+        "Junior Software Engineer", "New Grad Software Engineer", "Graduate Engineer",
+    ],
+    "Data Scientist": [
+        "Data Scientist", "Data Scientist I", "Junior Data Scientist",
+        "Associate Data Scientist", "ML Engineer", "Machine Learning Engineer",
+        "Applied Scientist", "Data Science Engineer", "New Grad Data Scientist",
+    ],
+}
+
+# ---------------------------------------------------------------------------
 # Hard-exclude words (apply to ALL categories)
 # Uses whole-word matching to avoid false positives (e.g. "sr" in "senior")
 # ---------------------------------------------------------------------------
 GLOBAL_EXCLUDE_WORDS = [
-    "senior", "sr", "staff", "principal", "lead", "architect",
+    "senior", "sr.", "sr", "staff", "principal", "lead", "architect",
     "manager", "director", "vp", "vice president", "head of",
     "cto", "cpo", "ceo",
 ]
@@ -104,29 +123,44 @@ def classify_role(job_title: str, user_category: str | None) -> RoleVerdict:
         RoleVerdict ("PRIORITY" | "NEUTRAL" | "PENALIZED" | "EXCLUDED")
     """
     title_lower = _normalize(job_title)
-    cat_lower = _normalize(user_category or "")
+    cat = (user_category or "").strip()
 
     # 1. Global hard-exclude (seniority/management)
     if _contains_exclude_word(title_lower):
         return "EXCLUDED"
 
-    # 2. Category-specific logic
-    if "sde" in cat_lower or "software" in cat_lower or "developer" in cat_lower or "engineer" in cat_lower:
-        # SDE-1 track
+    # 2. Resolve the user's category to a known track via ROLE_ALIASES keys
+    resolved_track: str | None = None
+    for key in ROLE_ALIASES:
+        if key.lower() == cat.lower():
+            resolved_track = key
+            break
+
+    # 3. Category-specific logic
+    if resolved_track == "SDE-1":
         if _phrase_match(title_lower, SDE1_PENALIZE_PHRASES):
             return "PENALIZED"
+        # Priority: title contains any SDE-1 alias
+        sde_aliases_lower = [a.lower() for a in ROLE_ALIASES["SDE-1"]]
+        if _phrase_match(title_lower, sde_aliases_lower):
+            return "PRIORITY"
+        # Also check the legacy priority phrases for backwards compat
         if _phrase_match(title_lower, SDE1_PRIORITY_PHRASES):
             return "PRIORITY"
         # Generic tech role — neutral
-        generic_tech = ["engineer", "developer", "programmer", "scientist", "analyst", "researcher"]
+        generic_tech = ["engineer", "developer", "programmer"]
         if any(w in title_lower for w in generic_tech):
             return "NEUTRAL"
         return "EXCLUDED"
 
-    elif "data scientist" in cat_lower or "data science" in cat_lower or "ml" in cat_lower or "machine learning" in cat_lower:
-        # Data Scientist track
+    elif resolved_track == "Data Scientist":
         if _phrase_match(title_lower, DS_PENALIZE_PHRASES):
             return "PENALIZED"
+        # Priority: title contains any DS alias
+        ds_aliases_lower = [a.lower() for a in ROLE_ALIASES["Data Scientist"]]
+        if _phrase_match(title_lower, ds_aliases_lower):
+            return "PRIORITY"
+        # Also check the legacy priority phrases for backwards compat
         if _phrase_match(title_lower, DS_PRIORITY_PHRASES):
             return "PRIORITY"
         # Generic data/ML role — neutral
